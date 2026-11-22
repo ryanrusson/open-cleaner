@@ -51,10 +51,16 @@ jobs:
       - name: Smoke test the scanner
         run: cargo run -p driver-core --bin driver-scan > scan.json
       - run: npm run tauri build
+      # Tag with git rather than letting the release API create the tag:
+      # the API refuses to tag commits that touch workflow files.
+      - name: Tag this commit
+        shell: bash
+        run: |
+          git tag "${{ needs.check.outputs.tag }}"
+          git push origin "${{ needs.check.outputs.tag }}"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check.outputs.tag }}
-          target_commitish: ${{ github.sha }}
           name: Driver Updater ${{ needs.check.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
