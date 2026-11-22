@@ -7,14 +7,21 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
 };
 use windows::Win32::System::UpdateAgent::{
-    ssWindowsUpdate, IUpdate, IUpdateSession, IWindowsDriverUpdate, UpdateSession,
+    ssWindowsUpdate, IUpdate, IUpdateCollection, IUpdateSession, IWindowsDriverUpdate,
+    UpdateSession,
 };
 
 use crate::date;
 use crate::models::AvailableUpdate;
 
 /// Balances a successful `CoInitializeEx` on this thread.
-struct ComGuard(bool);
+pub(super) struct ComGuard(bool);
+
+impl ComGuard {
+    pub(super) fn init() -> Self {
+        Self(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok())
+    }
+}
 
 impl Drop for ComGuard {
     fn drop(&mut self) {
@@ -24,7 +31,7 @@ impl Drop for ComGuard {
     }
 }
 
-fn explain(e: windows::core::Error) -> String {
+pub(super) fn explain(e: windows::core::Error) -> String {
     // The codes people actually hit, in plain words.
     let hint = match e.code().0 as u32 {
         0x8024_402C | 0x8024_0438 | 0x8007_2EE2 | 0x8007_2EE7 | 0x8007_2EFD | 0x8024_401C => {
@@ -55,11 +62,7 @@ unsafe fn describe(update: &IUpdate) -> Option<AvailableUpdate> {
         .map(|d| d.Anonymous2.Lo64)
         .unwrap_or(0);
     Some(AvailableUpdate {
-        update_id: update
-            .Identity()
-            .and_then(|i| i.UpdateID())
-            .map(|b| b.to_string())
-            .unwrap_or_default(),
+        update_id: update_id(update),
         title: text(update.Title()),
         description: text(update.Description()),
         driver_model: text(driver.DriverModel()),
@@ -73,23 +76,36 @@ unsafe fn describe(update: &IUpdate) -> Option<AvailableUpdate> {
     })
 }
 
+pub(super) unsafe fn update_id(update: &IUpdate) -> String {
+    update
+        .Identity()
+        .and_then(|i| i.UpdateID())
+        .map(|b| b.to_string())
+        .unwrap_or_default()
+}
+
+/// Open a session and fetch the driver updates currently offered.
+pub(super) unsafe fn open_and_search() -> Result<(IUpdateSession, IUpdateCollection), String> {
+    let session: IUpdateSession =
+        CoCreateInstance(&UpdateSession, None, CLSCTX_INPROC_SERVER).map_err(explain)?;
+    let _ = session.SetClientApplicationID(&BSTR::from("Windows Driver Updater"));
+    let searcher = session.CreateUpdateSearcher().map_err(explain)?;
+    // Ask Microsoft directly rather than a corporate WSUS server, which
+    // usually does not carry drivers at all.
+    let _ = searcher.SetServerSelection(ssWindowsUpdate);
+    let _ = searcher.SetOnline(VARIANT_TRUE);
+
+    let result = searcher
+        .Search(&BSTR::from("IsInstalled=0 and Type='Driver' and IsHidden=0"))
+        .map_err(explain)?;
+    let updates = result.Updates().map_err(explain)?;
+    Ok((session, updates))
+}
+
 pub fn search() -> Result<Vec<AvailableUpdate>, String> {
     unsafe {
-        let _com = ComGuard(CoInitializeEx(None, COINIT_MULTITHREADED).is_ok());
-
-        let session: IUpdateSession =
-            CoCreateInstance(&UpdateSession, None, CLSCTX_INPROC_SERVER).map_err(explain)?;
-        let _ = session.SetClientApplicationID(&BSTR::from("Windows Driver Updater"));
-        let searcher = session.CreateUpdateSearcher().map_err(explain)?;
-        // Ask Microsoft directly rather than a corporate WSUS server, which
-        // usually does not carry drivers at all.
-        let _ = searcher.SetServerSelection(ssWindowsUpdate);
-        let _ = searcher.SetOnline(VARIANT_TRUE);
-
-        let result = searcher
-            .Search(&BSTR::from("IsInstalled=0 and Type='Driver' and IsHidden=0"))
-            .map_err(explain)?;
-        let updates = result.Updates().map_err(explain)?;
+        let _com = ComGuard::init();
+        let (_session, updates) = open_and_search()?;
         let count = updates.Count().map_err(explain)?;
 
         let mut found = Vec::new();

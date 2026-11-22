@@ -20,15 +20,29 @@ which ones have updates. Rust backend, Tauri 2 + React interface.
 - **Surfaces problem devices**: missing drivers and Device Manager error codes.
 - **Exports** the report as CSV or JSON.
 
-It is read-only. It never installs, removes or changes a driver, and it does not
-need administrator rights. To install an update it found, use the
-**Open Windows Update** button.
+- **Installs the updates you choose**, one click each or all at once. Windows
+  asks for administrator permission, the app tries to create a restore point,
+  then downloads and installs through Windows Update, so every driver is the
+  same Microsoft-signed package Windows itself would install.
 
-## Install
+Scanning needs no administrator rights and changes nothing. Only installing
+asks for elevation, and only for the updates you confirmed.
 
-Every push builds a Windows installer in GitHub Actions: open the latest
-**Build** run under the Actions tab and download `driver-updater-installer`.
-The installer is not code-signed yet, so SmartScreen will warn on first run.
+## Download
+
+**[Download the latest release](https://github.com/ryanrusson/windows-driver-updater/releases/latest)**
+and run the `.exe` under Assets.
+
+The installer is not code-signed yet, so Windows SmartScreen will warn the
+first time: choose **More info → Run anyway**. It installs everything the app
+needs (the WebView2 runtime is downloaded if your PC does not have it).
+
+## Release
+
+Bump the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and
+`package.json`, then run the **Release** workflow from the Actions tab (or push
+a matching `v1.2.3` tag). It builds the installer and publishes a GitHub
+Release with it attached.
 
 ## Develop
 
@@ -41,12 +55,13 @@ npm run tauri dev      # run the app (Windows)
 npm run tauri build    # build the installer (Windows)
 npm run dev            # UI only, in a browser, on sample data (any OS)
 cargo test -p driver-core
+cargo run -p driver-core --bin driver-scan   # scan from the command line, as JSON (Windows)
 ```
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `crates/driver-core` | All the logic. `platform/` talks to Windows (WMI for the inventory, the Windows Update Agent API for available updates); the rest is plain Rust with tests that run on any OS. |
-| `src-tauri` | The Tauri shell: four commands exposing `driver-core` to the UI. |
+| `crates/driver-core` | All the logic. `platform/` talks to Windows (WMI for the inventory, the Windows Update Agent API to find and install updates, and the elevated install helper); the rest is plain Rust with tests that run on any OS. |
+| `src-tauri` | The Tauri shell: a handful of commands exposing `driver-core` to the UI. |
 | `src` | The React interface. |

@@ -104,3 +104,25 @@ pub struct UpdateReport {
     /// Updates Windows offers that we could not tie to a scanned device.
     pub unmatched: Vec<AvailableUpdate>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum InstallStage {
+    Downloading,
+    Installing,
+    Installed,
+    Failed,
+}
+
+/// Progress reported while updates install. Sent as JSON lines from the
+/// elevated helper process to the app, then on to the UI.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum InstallEvent {
+    /// What the installer is doing between updates.
+    Status { message: String },
+    Update { update_id: String, stage: InstallStage, detail: String },
+    Finished { installed: u32, failed: u32, reboot_required: bool },
+    /// The run could not proceed at all.
+    Error { message: String },
+}

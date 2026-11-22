@@ -1,0 +1,51 @@
+name: Release
+
+# Publishes a GitHub Release with the installer attached. The version comes
+# from src-tauri/tauri.conf.json. Either push a matching tag (v1.2.3) or run
+# this workflow by hand and it creates the tag for you.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $tag) {
+            throw "Tag $env:GITHUB_REF_NAME does not match app version $version"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: cargo test -p driver-core
+      - name: Smoke test the scanner
+        run: cargo run -p driver-core --bin driver-scan > scan.json
+      - run: npm run tauri build
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Driver Updater ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: target/release/bundle/nsis/*.exe
+          body: |
+            Download the `.exe` below and run it to install Driver Updater.
+
+            The installer is not code-signed yet, so Windows SmartScreen will warn the first time: choose **More info → Run anyway**.

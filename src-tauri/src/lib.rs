@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use driver_core::{analyze, export, ScanResult, UpdateReport};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_opener::OpenerExt;
 
 /// The latest results, kept so exports reflect exactly what is on screen.
@@ -55,6 +55,32 @@ fn export_report(path: String, state: State<'_, AppState>) -> Result<(), String>
     std::fs::write(&path, body).map_err(|e| format!("Could not save {path}: {e}"))
 }
 
+/// Installs driver updates from the latest check. Progress arrives in the UI
+/// as `install-progress` events; this returns once everything is done.
+#[tauri::command]
+async fn install_updates(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    update_ids: Vec<String>,
+) -> Result<(), String> {
+    // Only updates this app found and matched to a device may be installed.
+    let offered = state
+        .report
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| update_ids.iter().all(|id| r.matched.iter().any(|m| &m.update.update_id == id)));
+    if !offered {
+        return Err("Check for updates again before installing.".into());
+    }
+    blocking(move || {
+        driver_core::install_updates(&update_ids, &mut |event| {
+            let _ = app.emit("install-progress", &event);
+        })
+    })
+    .await
+}
+
 /// Opens a vendor page or the Windows Update settings page. Restricted to
 /// those so the webview can never launch arbitrary programs or files.
 #[tauri::command]
@@ -74,6 +100,7 @@ pub fn run() {
             scan_drivers,
             check_updates,
             export_report,
+            install_updates,
             open_link
         ])
         .run(tauri::generate_context!())

@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { mockReport, mockScan } from "./mock";
-import type { ScanResult, UpdateReport } from "./types";
+import type { InstallEvent, ScanResult, UpdateReport } from "./types";
 
 /** False when the UI is opened in a plain browser, where it runs on sample data. */
 export const inApp = "__TAURI_INTERNALS__" in window;
@@ -34,4 +35,41 @@ export async function exportReport(): Promise<string | null> {
   if (!path) return null;
   await invoke("export_report", { path });
   return path;
+}
+
+/** Installs the given updates, reporting progress until all are done. */
+export async function installUpdates(
+  updateIds: string[],
+  onEvent: (event: InstallEvent) => void,
+): Promise<void> {
+  if (!inApp) return mockInstall(updateIds, onEvent);
+  const stop = await listen<InstallEvent>("install-progress", (e) => onEvent(e.payload));
+  try {
+    await invoke("install_updates", { updateIds });
+  } finally {
+    stop();
+  }
+}
+
+async function mockInstall(ids: string[], onEvent: (event: InstallEvent) => void) {
+  onEvent(await later({ kind: "status", message: "Contacting Windows Update…" }, 300));
+  onEvent(await later({ kind: "status", message: "Restore point created." }, 600));
+  for (const [i, updateId] of ids.entries()) {
+    onEvent(await later({ kind: "update", updateId, stage: "downloading", detail: "" }, 300));
+    onEvent(await later({ kind: "update", updateId, stage: "installing", detail: "" }, 700));
+    const failed = i === 1;
+    onEvent(
+      await later(
+        {
+          kind: "update",
+          updateId,
+          stage: failed ? "failed" : "installed",
+          detail: failed ? "Windows Update reported error 0x80240022" : "",
+        },
+        700,
+      ),
+    );
+  }
+  const failed = ids.length > 1 ? 1 : 0;
+  onEvent({ kind: "finished", installed: ids.length - failed, failed, rebootRequired: true });
 }

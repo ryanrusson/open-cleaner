@@ -4,10 +4,19 @@ import {
   checkUpdates,
   exportReport,
   inApp,
+  installUpdates,
   openLink,
   scanDrivers,
 } from "./api";
-import type { AvailableUpdate, Driver, ScanResult, Status, UpdateReport } from "./types";
+import type {
+  AvailableUpdate,
+  Driver,
+  InstallEvent,
+  InstallStage,
+  ScanResult,
+  Status,
+  UpdateReport,
+} from "./types";
 
 type Phase =
   | { step: "scanning" }
@@ -20,6 +29,28 @@ type UpdateCheck =
   | { step: "done"; report: UpdateReport };
 
 type Filter = Status | "all";
+
+interface InstallItem {
+  update: AvailableUpdate;
+  deviceName: string;
+  stage: InstallStage | "waiting";
+  detail: string;
+}
+
+interface InstallRun {
+  step: "confirm" | "running" | "done" | "failed";
+  items: InstallItem[];
+  message: string;
+  rebootRequired: boolean;
+}
+
+const STAGE_LABEL: Record<InstallItem["stage"], string> = {
+  waiting: "Waiting",
+  downloading: "Downloading…",
+  installing: "Installing…",
+  installed: "Installed",
+  failed: "Failed",
+};
 
 const STATUS: Record<Status, { label: string; order: number }> = {
   problem: { label: "Problem", order: 0 },
@@ -51,6 +82,7 @@ export default function App() {
   const [showInbox, setShowInbox] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [install, setInstall] = useState<InstallRun | null>(null);
 
   const runUpdateCheck = useCallback(async () => {
     setCheck({ step: "checking" });
@@ -130,6 +162,63 @@ export default function App() {
 
   const selected = scan?.drivers.find((d) => d.deviceId === selectedId) ?? null;
 
+  /** Open the confirmation dialog for one device's update, or for all of them. */
+  const reviewInstall = (deviceId?: string) => {
+    const items = (report?.matched ?? [])
+      .filter((m) => !deviceId || m.deviceId === deviceId)
+      // One update can serve several identical devices; install it once.
+      .filter((m, i, all) => all.findIndex((o) => o.update.updateId === m.update.updateId) === i)
+      .map((m) => ({
+        update: m.update,
+        deviceName: scan?.drivers.find((d) => d.deviceId === m.deviceId)?.deviceName ?? "",
+        stage: "waiting" as const,
+        detail: "",
+      }));
+    if (items.length) setInstall({ step: "confirm", items, message: "", rebootRequired: false });
+  };
+
+  const startInstall = async () => {
+    if (!install) return;
+    setInstall({ ...install, step: "running", message: "Waiting for administrator permission…" });
+    const onEvent = (event: InstallEvent) =>
+      setInstall((run) => {
+        if (!run) return run;
+        switch (event.kind) {
+          case "status":
+            return { ...run, message: event.message };
+          case "update":
+            return {
+              ...run,
+              message: "",
+              items: run.items.map((item) =>
+                item.update.updateId === event.updateId
+                  ? { ...item, stage: event.stage, detail: event.detail }
+                  : item,
+              ),
+            };
+          case "finished":
+            return { ...run, step: "done", message: "", rebootRequired: event.rebootRequired };
+          case "error":
+            return { ...run, step: "failed", message: event.message };
+        }
+      });
+    try {
+      await installUpdates(
+        install.items.map((item) => item.update.updateId),
+        onEvent,
+      );
+    } catch (e) {
+      setInstall((run) => run && { ...run, step: "failed", message: errorText(e) });
+    }
+  };
+
+  const closeInstall = () => {
+    const ran = install?.step === "done" || install?.items.some((i) => i.stage !== "waiting");
+    setInstall(null);
+    // Anything may have changed; show the truth rather than stale results.
+    if (ran) void runScan();
+  };
+
   const onExport = async () => {
     try {
       const path = await exportReport();
@@ -189,7 +278,11 @@ export default function App() {
       {scan && (
         <main className={selected ? "content with-panel" : "content"}>
           <section className="list">
-            <UpdateBanner check={check} onRetry={() => void runUpdateCheck()} />
+            <UpdateBanner
+              check={check}
+              onRetry={() => void runUpdateCheck()}
+              onInstall={() => reviewInstall()}
+            />
 
             <div className="stats">
               {(["update", "check", "problem", "ok"] as const).map((s) => (
@@ -281,18 +374,29 @@ export default function App() {
               driver={selected}
               status={statusOf(selected)}
               update={updates.get(selected.deviceId)}
+              onInstall={() => reviewInstall(selected.deviceId)}
               onClose={() => setSelectedId(null)}
             />
           )}
         </main>
       )}
 
+      {install && <InstallDialog run={install} onStart={() => void startInstall()} onClose={closeInstall} />}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
 
-function UpdateBanner({ check, onRetry }: { check: UpdateCheck; onRetry: () => void }) {
+function UpdateBanner({
+  check,
+  onRetry,
+  onInstall,
+}: {
+  check: UpdateCheck;
+  onRetry: () => void;
+  onInstall: () => void;
+}) {
   if (check.step === "checking") {
     return (
       <div className="banner">
@@ -324,11 +428,10 @@ function UpdateBanner({ check, onRetry }: { check: UpdateCheck; onRetry: () => v
   return (
     <div className="banner good">
       <span>
-        Windows Update has {count} newer driver{count === 1 ? "" : "s"} for this PC. Install them under
-        Optional updates.
+        Windows Update has {count} newer driver{count === 1 ? "" : "s"} for this PC.
       </span>
-      <button className="btn small" onClick={() => void openLink(WINDOWS_UPDATE_SETTINGS)}>
-        Open Windows Update
+      <button className="btn small primary" onClick={onInstall}>
+        Review and install
       </button>
     </div>
   );
@@ -338,11 +441,13 @@ function DetailPanel({
   driver: d,
   status,
   update,
+  onInstall,
   onClose,
 }: {
   driver: Driver;
   status: Status;
   update: AvailableUpdate | undefined;
+  onInstall: () => void;
   onClose: () => void;
 }) {
   const facts: [string, string][] = [
@@ -387,9 +492,14 @@ function DetailPanel({
               .filter(Boolean)
               .join(" · ")}
           </p>
-          <button className="btn small" onClick={() => void openLink(WINDOWS_UPDATE_SETTINGS)}>
-            Open Windows Update
-          </button>
+          <div className="row">
+            <button className="btn small primary" onClick={onInstall}>
+              Install this update
+            </button>
+            <button className="btn small" onClick={() => void openLink(WINDOWS_UPDATE_SETTINGS)}>
+              Open Windows Update
+            </button>
+          </div>
         </div>
       )}
 
@@ -413,6 +523,97 @@ function DetailPanel({
           ))}
       </dl>
     </aside>
+  );
+}
+
+function InstallDialog({
+  run,
+  onStart,
+  onClose,
+}: {
+  run: InstallRun;
+  onStart: () => void;
+  onClose: () => void;
+}) {
+  const count = run.items.length;
+  const installed = run.items.filter((i) => i.stage === "installed").length;
+  const failed = run.items.filter((i) => i.stage === "failed").length;
+  const title =
+    run.step === "confirm"
+      ? `Install ${count} driver update${count === 1 ? "" : "s"}?`
+      : run.step === "running"
+        ? "Installing driver updates"
+        : run.step === "failed"
+          ? "Installation did not finish"
+          : failed === 0
+            ? "Driver updates installed"
+            : installed === 0
+              ? "No updates were installed"
+              : `${installed} installed, ${failed} failed`;
+  return (
+    <div className="overlay">
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <h2>{title}</h2>
+
+        {run.step === "confirm" && (
+          <p className="muted">
+            Windows will ask for administrator permission. Driver Updater then tries to create a
+            restore point and installs these from Windows Update. Your screen, network or sound may
+            cut out briefly, so save your work first.
+          </p>
+        )}
+
+        <ul className="install-list">
+          {run.items.map((item) => (
+            <li key={item.update.updateId}>
+              <div>
+                <div className="device">{item.deviceName || item.update.driverModel}</div>
+                <div className="muted small">
+                  {[item.update.title, formatSize(item.update.sizeBytes)].filter(Boolean).join(" · ")}
+                </div>
+                {item.detail && <div className="small detail-error">{item.detail}</div>}
+              </div>
+              {run.step !== "confirm" && (
+                <span className={`stage ${item.stage}`}>
+                  {(item.stage === "downloading" || item.stage === "installing") && (
+                    <span className="spinner" />
+                  )}
+                  {STAGE_LABEL[item.stage]}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        {run.message && (
+          <p className={run.step === "failed" ? "detail-error" : "muted"}>{run.message}</p>
+        )}
+        {run.step === "done" && run.rebootRequired && (
+          <p className="callout check">Restart your PC to finish installing.</p>
+        )}
+
+        <div className="dialog-actions">
+          {run.step === "confirm" && (
+            <>
+              <button className="btn" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="btn primary" onClick={onStart}>
+                Install
+              </button>
+            </>
+          )}
+          {run.step === "running" && (
+            <span className="muted small">Keep this window open until it finishes.</span>
+          )}
+          {(run.step === "done" || run.step === "failed") && (
+            <button className="btn primary" onClick={onClose}>
+              Done
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

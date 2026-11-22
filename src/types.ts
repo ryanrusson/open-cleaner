@@ -61,3 +61,11 @@ export interface UpdateReport {
 }
 
 export type Status = "problem" | "update" | "check" | "ok";
+
+export type InstallStage = "downloading" | "installing" | "installed" | "failed";
+
+export type InstallEvent =
+  | { kind: "status"; message: string }
+  | { kind: "update"; updateId: string; stage: InstallStage; detail: string }
+  | { kind: "finished"; installed: number; failed: number; rebootRequired: boolean }
+  | { kind: "error"; message: string };
