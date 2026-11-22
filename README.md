@@ -40,9 +40,10 @@ needs (the WebView2 runtime is downloaded if your PC does not have it).
 ## Release
 
 Bump the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and
-`package.json`, then run the **Release** workflow from the Actions tab (or push
-a matching `v1.2.3` tag). It builds the installer and publishes a GitHub
-Release with it attached.
+`package.json`, and merge to `main`. The **Release** workflow sees a version
+that has not been released, builds the installer and publishes a GitHub
+Release with it attached. Merges that do not change the version publish
+nothing.
 
 ## Develop
 
