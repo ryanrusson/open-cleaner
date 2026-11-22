@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  type AppUpdate,
   WINDOWS_UPDATE_SETTINGS,
+  checkForAppUpdate,
   checkUpdates,
   exportReport,
   inApp,
@@ -83,6 +85,11 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [install, setInstall] = useState<InstallRun | null>(null);
+  const [appUpdate, setAppUpdate] = useState<AppUpdate | null>(null);
+
+  useEffect(() => {
+    void checkForAppUpdate().then(setAppUpdate);
+  }, []);
 
   const runUpdateCheck = useCallback(async () => {
     setCheck({ step: "checking" });
@@ -257,6 +264,18 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {appUpdate && (
+        <div className="app-update">
+          <span>Driver Updater {appUpdate.version} is available.</span>
+          <button className="btn small" onClick={() => void openLink(appUpdate.url)}>
+            Download
+          </button>
+          <button className="icon-btn" onClick={() => setAppUpdate(null)} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       {phase.step === "scanning" && (
         <div className="center">

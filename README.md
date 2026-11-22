@@ -25,6 +25,8 @@ which ones have updates. Rust backend, Tauri 2 + React interface.
   then downloads and installs through Windows Update, so every driver is the
   same Microsoft-signed package Windows itself would install.
 
+- **Tells you when a new version of the app is out**, with a link to download it.
+
 Scanning needs no administrator rights and changes nothing. Only installing
 asks for elevation, and only for the updates you confirmed.
 

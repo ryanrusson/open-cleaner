@@ -589,3 +589,13 @@ dd {
   gap: 8px;
   min-height: 34px;
 }
+
+.app-update {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 7px 20px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
