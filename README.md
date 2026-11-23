@@ -3,10 +3,12 @@
 [![Build](https://github.com/ryanrusson/open-cleaner/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ryanrusson/open-cleaner/actions/workflows/build.yml)
 [![Latest release](https://img.shields.io/github/v/release/ryanrusson/open-cleaner)](https://github.com/ryanrusson/open-cleaner/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/ryanrusson/open-cleaner/total)](https://github.com/ryanrusson/open-cleaner/releases)
+[![License: Apache 2.0 with Commons Clause](https://img.shields.io/badge/license-Apache%202.0%20%2B%20Commons%20Clause-blue)](LICENSE)
 ![Platform: Windows 10 and 11](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)
 ![Built with Rust and Tauri](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri-orange)
 
-A free, open-source PC maintenance app for Windows. It finds and installs
+A free PC maintenance app for Windows, with its source code open to read and
+modify. It finds and installs
 driver and app updates, clears out junk files, finds duplicate files, manages
 what starts with Windows, removes installed apps, and shows what is filling
 the disk. Rust backend, Tauri 2 + React interface.
@@ -125,3 +127,10 @@ cargo run -p driver-core --bin driver-scan   # scan from the command line, as JS
 | `crates/driver-core` | The driver logic. `platform/` talks to Windows (WMI for the inventory, the Windows Update Agent API to find and install updates, and the elevated install helper); the rest is plain Rust with tests that run on any OS. |
 | `src-tauri` | The Tauri shell: a handful of commands exposing the two crates to the UI. |
 | `src` | The React interface. |
+
+## License
+
+[Apache License 2.0 with the Commons Clause](LICENSE). You may use, modify and
+share OpenCleaner freely, including at work. You may not sell it, or sell a
+product or service whose value comes mainly from it. Because of that
+restriction this is a source-available license, not an open-source one.

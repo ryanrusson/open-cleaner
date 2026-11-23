@@ -2,6 +2,7 @@
 name = "opencleaner"
 version = "0.5.1"
 edition = "2021"
+license-file = "../LICENSE"
 description = "PC maintenance for Windows: driver and app updates, junk cleaning, startup, duplicates, disk usage"
 
 [lib]

@@ -2,6 +2,7 @@
 name = "system-tools"
 version = "0.5.1"
 edition = "2021"
+license-file = "../../LICENSE"
 description = "PC maintenance tools: junk cleaner, startup manager, installed apps, disk usage"
 
 [dependencies]
