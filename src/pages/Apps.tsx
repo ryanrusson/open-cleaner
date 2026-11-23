@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
-import { appsList, appsUninstall } from "../api";
+import { appsUninstall } from "../api";
 import { errorText, formatSize } from "../format";
 import type { InstalledApp } from "../types";
-import { Dialog, Failed, Loading, PageHeader, useLoad } from "../ui";
+import { Dialog, Failed, Loading, PageHeader } from "../ui";
+import { apps as installedApps, useResource } from "../store";
 
 type Sort = "name" | "size" | "date";
 
 export default function AppsPage() {
-  const { state, reload } = useLoad(appsList);
+  const { state, reload } = useResource(installedApps);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("name");
   const [confirming, setConfirming] = useState<InstalledApp | null>(null);

@@ -885,3 +885,69 @@ select {
 .link:hover {
   text-decoration: underline;
 }
+
+.headline {
+  font-size: 20px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.card.health {
+  gap: 6px;
+  align-items: flex-start;
+  border-left: 3px solid var(--tone, var(--border));
+}
+
+.card.health p {
+  flex: 1;
+  min-height: 2.6em;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.health-value {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.tag {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--check);
+  background: color-mix(in srgb, var(--check) 14%, transparent);
+  white-space: nowrap;
+}
+
+.narrow {
+  max-width: 460px;
+  line-height: 1.5;
+}
+
+.dupe-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.dupe-group:last-child {
+  border-bottom: 0;
+}
+
+.dupe-head {
+  padding: 9px 16px;
+  background: var(--surface-2);
+}
+
+.dupe-group .check-row {
+  padding: 8px 16px;
+  border-bottom: 0;
+}

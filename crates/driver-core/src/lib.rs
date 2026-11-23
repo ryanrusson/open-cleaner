@@ -73,3 +73,35 @@ pub fn run_install_helper(args: &[String]) -> i32 {
         1
     }
 }
+
+/// Relaunch this exe elevated (one UAC prompt) with `flag` and plain
+/// identifier `args`; each line the helper writes back is given to `on_line`.
+/// For elevated work other than driver installs.
+pub fn run_elevated(
+    flag: &str,
+    args: &[String],
+    on_line: &mut dyn FnMut(&[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        platform::elevate::run_elevated(flag, args, on_line)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (flag, args, on_line);
+        Err(WINDOWS_ONLY.into())
+    }
+}
+
+/// Helper side: the channel back to the app, given the pipe name it passed.
+pub fn open_helper_pipe(pipe_name: &str) -> Option<std::fs::File> {
+    #[cfg(windows)]
+    {
+        platform::elevate::open_pipe(pipe_name)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = pipe_name;
+        None
+    }
+}

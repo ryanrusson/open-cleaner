@@ -2,14 +2,26 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { mockApps, mockDisk, mockJunk, mockReport, mockScan, mockStartup } from "./mock";
+import {
+  mockApps,
+  mockDisk,
+  mockDuplicates,
+  mockJunk,
+  mockReport,
+  mockScan,
+  mockSoftware,
+  mockStartup,
+} from "./mock";
 import type {
   CleanCategory,
-  CleanResult,
+  CleanOutcome,
   DiskReport,
+  DuplicateReport,
   InstallEvent,
   InstalledApp,
+  RemovalResult,
   ScanResult,
+  SoftwareUpdate,
   StartupItem,
   UpdateReport,
 } from "./types";
@@ -130,7 +142,7 @@ export async function checkForAppUpdate(): Promise<AppUpdate | null> {
 export const cleanerScan = (): Promise<CleanCategory[]> =>
   inApp ? invoke("cleaner_scan") : later(mockJunk, 700);
 
-export const cleanerClean = (ids: string[]): Promise<CleanResult> =>
+export const cleanerClean = (ids: string[]): Promise<CleanOutcome> =>
   inApp
     ? invoke("cleaner_clean", { ids })
     : later(
@@ -138,6 +150,7 @@ export const cleanerClean = (ids: string[]): Promise<CleanResult> =>
           freedBytes: mockJunk.filter((c) => ids.includes(c.id)).reduce((n, c) => n + c.sizeBytes, 0),
           deleted: mockJunk.filter((c) => ids.includes(c.id)).reduce((n, c) => n + c.itemCount, 0),
           skipped: 14,
+          note: null,
         },
         1200,
       );
@@ -164,6 +177,42 @@ export const revealInExplorer = (path: string): Promise<void> =>
 /** Returns the chosen folder, or null if the user cancelled. */
 export async function pickFolder(): Promise<string | null> {
   if (!inApp) return null;
-  const picked = await open({ directory: true, title: "Choose a folder to analyse" });
+  const picked = await open({ directory: true, title: "Choose a folder" });
   return typeof picked === "string" ? picked : null;
 }
+
+// --- App updates and duplicates --------------------------------------------
+
+export const softwareList = (): Promise<SoftwareUpdate[]> =>
+  inApp ? invoke("software_list") : later(mockSoftware, 1200);
+
+/** Resolves when the app's installer has finished; this can take minutes. */
+export const softwareUpgrade = (id: string): Promise<void> =>
+  inApp
+    ? invoke("software_upgrade", { id })
+    : id === "Zoom.Zoom"
+      ? new Promise((_, reject) => setTimeout(() => reject("Installer failed with exit code: 1603"), 900))
+      : later(undefined, 900);
+
+/** Searches the given folder, or the user's profile folder when omitted. */
+export const duplicatesFind = (path?: string): Promise<DuplicateReport> =>
+  inApp ? invoke("duplicates_find", { path: path ?? null }) : later(mockDuplicates, 1500);
+
+export const duplicatesCancel = (): Promise<void> =>
+  inApp ? invoke("duplicates_cancel") : later(undefined, 0);
+
+/** Moves the given files to the Recycle Bin. */
+export const duplicatesRemove = (paths: string[]): Promise<RemovalResult> =>
+  inApp
+    ? invoke("duplicates_remove", { paths })
+    : later(
+        {
+          removed: paths.length,
+          freedBytes: mockDuplicates.groups.reduce(
+            (n, g) => n + g.sizeBytes * g.files.filter((f) => paths.includes(f.path)).length,
+            0,
+          ),
+          failed: 0,
+        },
+        600,
+      );

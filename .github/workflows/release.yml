@@ -64,11 +64,11 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check.outputs.tag }}
-          name: Driver Updater ${{ needs.check.outputs.tag }}
+          name: OpenCleaner ${{ needs.check.outputs.tag }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: target/release/bundle/nsis/*.exe
           body: |
-            Download the `.exe` below and run it to install Driver Updater.
+            Download the `.exe` below and run it to install OpenCleaner.
 
             The installer is not code-signed yet, so Windows SmartScreen will warn the first time: choose **More info → Run anyway**.

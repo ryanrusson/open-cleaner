@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -25,9 +25,14 @@ pub struct CleanCategory {
     pub item_count: u64,
     /// Ticked by default in the UI.
     pub recommended: bool,
+    /// Lives in a system folder; cleaning it raises an administrator prompt.
+    pub needs_admin: bool,
+    /// False when the folder cannot be read without administrator rights,
+    /// so the size shown is only a lower bound.
+    pub size_known: bool,
 }
 
-#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CleanResult {
     pub freed_bytes: u64,
@@ -36,17 +41,34 @@ pub struct CleanResult {
     pub skipped: u64,
 }
 
-/// The per-user folders everything is resolved from.
+impl CleanResult {
+    pub fn add(&mut self, other: &CleanResult) {
+        self.freed_bytes += other.freed_bytes;
+        self.deleted += other.deleted;
+        self.skipped += other.skipped;
+    }
+}
+
+/// The well-known folders everything is resolved from.
 #[derive(Clone, Debug, Default)]
 pub struct Folders {
     pub temp: Option<PathBuf>,
     pub local_app_data: Option<PathBuf>,
+    /// `C:\Windows`
+    pub system_root: Option<PathBuf>,
+    /// `C:\ProgramData`
+    pub program_data: Option<PathBuf>,
 }
 
 impl Folders {
     pub fn from_env() -> Self {
         let dir = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from);
-        Self { temp: dir("TEMP"), local_app_data: dir("LOCALAPPDATA") }
+        Self {
+            temp: dir("TEMP"),
+            local_app_data: dir("LOCALAPPDATA"),
+            system_root: dir("SystemRoot"),
+            program_data: dir("ProgramData"),
+        }
     }
 }
 
@@ -56,6 +78,8 @@ enum Target {
     Dir { path: PathBuf, min_age: Option<Duration> },
     /// Files directly inside `dir` whose names start with one of `prefixes`.
     Files { dir: PathBuf, prefixes: &'static [&'static str] },
+    /// One specific file.
+    File { path: PathBuf },
     RecycleBin,
 }
 
@@ -64,6 +88,7 @@ struct Category {
     label: &'static str,
     description: &'static str,
     recommended: bool,
+    needs_admin: bool,
     targets: Vec<Target>,
 }
 
@@ -102,6 +127,7 @@ fn categories(folders: &Folders) -> Vec<Category> {
             label: "Temporary files",
             description: "Leftovers from apps and installers, untouched for at least a day.",
             recommended: true,
+            needs_admin: false,
             // Fresh temp files may belong to something still running.
             targets: vec![Target::Dir { path: temp.clone(), min_age: Some(DAY) }],
         });
@@ -113,6 +139,7 @@ fn categories(folders: &Folders) -> Vec<Category> {
             label,
             description: "Cached web pages and images. Sign-ins, history and passwords are kept.",
             recommended: true,
+            needs_admin: false,
             targets: chromium_caches(&user_data),
         };
         list.push(browser("chrome-cache", "Chrome cache", local.join("Google/Chrome/User Data")));
@@ -127,6 +154,7 @@ fn categories(folders: &Folders) -> Vec<Category> {
             label: "Firefox cache",
             description: "Cached web pages and images. Sign-ins, history and passwords are kept.",
             recommended: true,
+            needs_admin: false,
             targets: firefox_caches(&local.join("Mozilla/Firefox/Profiles")),
         });
         list.push(Category {
@@ -134,6 +162,7 @@ fn categories(folders: &Folders) -> Vec<Category> {
             label: "Crash dumps and error reports",
             description: "Diagnostic files saved when apps crashed.",
             recommended: true,
+            needs_admin: false,
             targets: vec![
                 Target::Dir { path: local.join("CrashDumps"), min_age: None },
                 Target::Dir { path: local.join("Microsoft/Windows/WER/ReportArchive"), min_age: None },
@@ -145,6 +174,7 @@ fn categories(folders: &Folders) -> Vec<Category> {
             label: "Thumbnail cache",
             description: "Preview images for folders. Windows rebuilds them as needed.",
             recommended: false,
+            needs_admin: false,
             targets: vec![Target::Files {
                 dir: local.join("Microsoft/Windows/Explorer"),
                 prefixes: &["thumbcache_", "iconcache_"],
@@ -157,8 +187,51 @@ fn categories(folders: &Folders) -> Vec<Category> {
         label: "Recycle Bin",
         description: "Files you already deleted. Emptying it is permanent.",
         recommended: false,
+        needs_admin: false,
         targets: vec![Target::RecycleBin],
     });
+
+    if let Some(windows) = &folders.system_root {
+        list.push(Category {
+            id: "windows-temp",
+            label: "Windows temporary files",
+            description: "Leftovers from Windows and installers, untouched for at least a day.",
+            recommended: false,
+            needs_admin: true,
+            targets: vec![Target::Dir { path: windows.join("Temp"), min_age: Some(DAY) }],
+        });
+        list.push(Category {
+            id: "update-cache",
+            label: "Windows Update downloads",
+            description: "Already-installed update files. Windows downloads again anything it still needs.",
+            recommended: false,
+            needs_admin: true,
+            targets: vec![Target::Dir {
+                path: windows.join("SoftwareDistribution/Download"),
+                min_age: Some(DAY),
+            }],
+        });
+        let mut dumps = vec![
+            Target::Dir { path: windows.join("Minidump"), min_age: None },
+            Target::File { path: windows.join("MEMORY.DMP") },
+        ];
+        if let Some(program_data) = &folders.program_data {
+            for queue in ["ReportArchive", "ReportQueue"] {
+                dumps.push(Target::Dir {
+                    path: program_data.join("Microsoft/Windows/WER").join(queue),
+                    min_age: None,
+                });
+            }
+        }
+        list.push(Category {
+            id: "system-dumps",
+            label: "System crash dumps and error reports",
+            description: "Memory dumps and reports saved when Windows itself crashed.",
+            recommended: false,
+            needs_admin: true,
+            targets: dumps,
+        });
+    }
 
     // A browser that is not installed has nothing to offer.
     list.retain(|c| !c.targets.is_empty());
@@ -195,12 +268,20 @@ struct Tally {
     bytes: u64,
     files: u64,
     skipped: u64,
+    /// A folder could not even be listed (no permission).
+    unreadable: bool,
 }
 
 /// Walk `dir`, counting eligible files; with `delete`, remove them too.
 /// Returns whether `dir` ended up empty.
 fn sweep(dir: &Path, min_age: Option<Duration>, now: SystemTime, delete: bool, tally: &mut Tally) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else { return false };
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            tally.unreadable |= e.kind() == std::io::ErrorKind::PermissionDenied;
+            return false;
+        }
+    };
     let mut empty = true;
     for entry in entries.flatten() {
         let path = entry.path();
@@ -259,6 +340,18 @@ fn process(target: &Target, now: SystemTime, delete: bool, tally: &mut Tally) {
         Target::Files { dir, prefixes } if is_safe_root(dir) => {
             sweep_files(dir, prefixes, delete, tally);
         }
+        Target::File { path } if is_safe_root(path) => {
+            let Ok(meta) = fs::symlink_metadata(path) else { return };
+            if is_link(&meta) || !meta.is_file() {
+                return;
+            }
+            if !delete || fs::remove_file(path).is_ok() {
+                tally.bytes += meta.len();
+                tally.files += 1;
+            } else {
+                tally.skipped += 1;
+            }
+        }
         Target::RecycleBin => {
             let (bytes, items) = recycle_bin::query();
             if !delete || items == 0 || recycle_bin::empty() {
@@ -288,6 +381,8 @@ pub fn scan_in(folders: &Folders) -> Vec<CleanCategory> {
                 size_bytes: tally.bytes,
                 item_count: tally.files,
                 recommended: c.recommended,
+                needs_admin: c.needs_admin,
+                size_known: !tally.unreadable,
             }
         })
         .collect()
@@ -302,6 +397,11 @@ pub fn clean_in(folders: &Folders, ids: &[String]) -> CleanResult {
         }
     }
     CleanResult { freed_bytes: tally.bytes, deleted: tally.files, skipped: tally.skipped }
+}
+
+/// Whether cleaning this category must be done by an elevated process.
+pub fn needs_admin(id: &str) -> bool {
+    categories(&Folders::from_env()).iter().any(|c| c.id == id && c.needs_admin)
 }
 
 /// Measure what each category would free. Deletes nothing.
@@ -364,6 +464,8 @@ mod tests {
         let folders = Folders {
             temp: Some(root.join("Local/Temp")),
             local_app_data: Some(root.join("Local")),
+            system_root: Some(root.join("Windows")),
+            program_data: Some(root.join("ProgramData")),
         };
         fs::create_dir_all(folders.temp.as_ref().unwrap()).unwrap();
         (root, folders)
@@ -441,6 +543,33 @@ mod tests {
         let result = clean_in(&folders, &["thumbnails".to_string()]);
         assert_eq!(result.deleted, 1);
         assert!(explorer.join("something-else.db").exists());
+    }
+
+    #[test]
+    fn system_categories_are_marked_and_cleaned_within_their_folders() {
+        let (root, folders) = sandbox("system");
+        let windows = root.join("Windows");
+        write(&windows.join("Temp/setup.log"), 40, DAY * 2);
+        write(&windows.join("Temp/fresh.log"), 40, Duration::ZERO);
+        write(&windows.join("Minidump/crash.dmp"), 70, Duration::ZERO);
+        write(&windows.join("MEMORY.DMP"), 900, Duration::ZERO);
+        write(&windows.join("System32/kernel.dll"), 5, DAY * 400);
+        write(&windows.join("notepad.exe"), 5, DAY * 400);
+
+        let found = scan_in(&folders);
+        assert!(category(&found, "windows-temp").needs_admin);
+        assert!(!category(&found, "temp").needs_admin);
+        assert_eq!(category(&found, "windows-temp").size_bytes, 40);
+        assert_eq!(category(&found, "system-dumps").size_bytes, 970);
+        assert!(category(&found, "system-dumps").size_known);
+
+        clean_in(&folders, &["windows-temp".to_string(), "system-dumps".to_string()]);
+        assert!(!windows.join("Temp/setup.log").exists());
+        assert!(windows.join("Temp/fresh.log").exists());
+        assert!(!windows.join("MEMORY.DMP").exists());
+        assert!(!windows.join("Minidump/crash.dmp").exists());
+        assert!(windows.join("System32/kernel.dll").exists());
+        assert!(windows.join("notepad.exe").exists());
     }
 
     #[cfg(unix)]

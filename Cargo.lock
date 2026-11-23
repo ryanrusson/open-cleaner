@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "driver-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3603,10 +3603,11 @@ dependencies = [
 
 [[package]]
 name = "system-tools"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "windows",
  "winreg",
 ]
@@ -4723,10 +4724,11 @@ dependencies = [
 
 [[package]]
 name = "windows-driver-updater"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "driver-core",
  "serde",
+ "serde_json",
  "system-tools",
  "tauri",
  "tauri-build",

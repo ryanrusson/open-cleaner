@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   WINDOWS_UPDATE_SETTINGS,
-  checkUpdates,
   exportReport,
   inApp,
   installUpdates,
   openLink,
-  scanDrivers,
 } from "../api";
+import { driverUpdates, drivers, ensureDrivers, rescanDrivers, useWatch } from "../store";
 import { errorText, formatAge, formatSize } from "../format";
 import type {
   AvailableUpdate,
@@ -61,38 +60,34 @@ const STATUS: Record<Status, { label: string; order: number }> = {
 };
 
 export default function DriversPage() {
-  const [phase, setPhase] = useState<Phase>({ step: "scanning" });
-  const [check, setCheck] = useState<UpdateCheck>({ step: "checking" });
+  const scanState = useWatch(drivers);
+  const checkState = useWatch(driverUpdates);
+  const phase: Phase =
+    scanState.step === "loading"
+      ? { step: "scanning" }
+      : scanState.step === "failed"
+        ? scanState
+        : { step: "ready", scan: scanState.data };
+  const check: UpdateCheck =
+    checkState.step === "loading"
+      ? { step: "checking" }
+      : checkState.step === "failed"
+        ? checkState
+        : { step: "done", report: checkState.data };
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [showInbox, setShowInbox] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [install, setInstall] = useState<InstallRun | null>(null);
-  const runUpdateCheck = useCallback(async () => {
-    setCheck({ step: "checking" });
-    try {
-      setCheck({ step: "done", report: await checkUpdates() });
-    } catch (e) {
-      setCheck({ step: "failed", message: errorText(e) });
-    }
-  }, []);
+  const runUpdateCheck = useCallback(() => driverUpdates.reload(), []);
 
   const runScan = useCallback(async () => {
-    setPhase({ step: "scanning" });
     setSelectedId(null);
-    try {
-      setPhase({ step: "ready", scan: await scanDrivers() });
-    } catch (e) {
-      setPhase({ step: "failed", message: errorText(e) });
-      return;
-    }
-    await runUpdateCheck();
-  }, [runUpdateCheck]);
+    await rescanDrivers();
+  }, []);
 
-  useEffect(() => {
-    void runScan();
-  }, [runScan]);
+  useEffect(() => ensureDrivers(), []);
 
   useEffect(() => {
     if (!toast) return;
@@ -541,7 +536,7 @@ function InstallDialog({
 
         {run.step === "confirm" && (
           <p className="muted">
-            Windows will ask for administrator permission. Driver Updater then tries to create a
+            Windows will ask for administrator permission. OpenCleaner then tries to create a
             restore point and installs these from Windows Update. Your screen, network or sound may
             cut out briefly, so save your work first.
           </p>

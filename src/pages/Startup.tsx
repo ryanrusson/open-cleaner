@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { startupList, startupSetEnabled } from "../api";
+import { startupSetEnabled } from "../api";
 import { errorText } from "../format";
 import type { StartupItem } from "../types";
-import { Failed, Loading, PageHeader, useLoad } from "../ui";
+import { Failed, Loading, PageHeader } from "../ui";
+import { startup, useResource } from "../store";
 
 export default function StartupPage() {
-  const { state, reload, setState } = useLoad(startupList);
+  const { state, reload, setState } = useResource(startup);
   const [error, setError] = useState<string | null>(null);
 
   const toggle = async (item: StartupItem) => {

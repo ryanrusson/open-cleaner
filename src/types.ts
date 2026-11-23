@@ -79,6 +79,8 @@ export interface CleanCategory {
   sizeBytes: number;
   itemCount: number;
   recommended: boolean;
+  needsAdmin: boolean;
+  sizeKnown: boolean;
 }
 
 export interface CleanResult {
@@ -126,4 +128,40 @@ export interface DiskReport {
   folders: FolderSize[];
   largestFiles: FileEntry[];
   unreadable: number;
+}
+
+export interface CleanOutcome extends CleanResult {
+  /** Set when the system-wide part could not be done. */
+  note: string | null;
+}
+
+export interface SoftwareUpdate {
+  id: string;
+  name: string;
+  currentVersion: string;
+  availableVersion: string;
+  source: string;
+}
+
+export interface DuplicateFile {
+  path: string;
+  modified: number | null;
+}
+
+export interface DuplicateGroup {
+  sizeBytes: number;
+  files: DuplicateFile[];
+}
+
+export interface DuplicateReport {
+  root: string;
+  groups: DuplicateGroup[];
+  wastedBytes: number;
+  filesChecked: number;
+}
+
+export interface RemovalResult {
+  removed: number;
+  freedBytes: number;
+  failed: number;
 }

@@ -1,10 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { errorText } from "./format";
-
-type Load<T> =
-  | { step: "loading" }
-  | { step: "failed"; message: string }
-  | { step: "ready"; data: T };
+import type { Load } from "./store";
 
 /** Runs `fetcher` on mount and again on `reload()`. */
 export function useLoad<T>(fetcher: () => Promise<T>) {

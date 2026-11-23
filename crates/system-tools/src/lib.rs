@@ -7,6 +7,8 @@
 pub mod apps;
 pub mod cleaner;
 pub mod disk;
+pub mod duplicates;
+pub mod software;
 pub mod startup;
 
 #[cfg(not(windows))]

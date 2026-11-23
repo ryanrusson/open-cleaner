@@ -88,7 +88,7 @@ pub(super) unsafe fn update_id(update: &IUpdate) -> String {
 pub(super) unsafe fn open_and_search() -> Result<(IUpdateSession, IUpdateCollection), String> {
     let session: IUpdateSession =
         CoCreateInstance(&UpdateSession, None, CLSCTX_INPROC_SERVER).map_err(explain)?;
-    let _ = session.SetClientApplicationID(&BSTR::from("Windows Driver Updater"));
+    let _ = session.SetClientApplicationID(&BSTR::from("OpenCleaner"));
     let searcher = session.CreateUpdateSearcher().map_err(explain)?;
     // Ask Microsoft directly rather than a corporate WSUS server, which
     // usually does not carry drivers at all.

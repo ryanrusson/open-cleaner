@@ -84,7 +84,7 @@ pub fn run(ids: &[String], emit: &mut dyn FnMut(InstallEvent)) -> Result<(), Str
         }
 
         emit(InstallEvent::Status { message: "Creating a restore point…".into() });
-        let restore_point = restore::begin("Driver Updater: before driver updates");
+        let restore_point = restore::begin("OpenCleaner: before driver updates");
         emit(InstallEvent::Status {
             message: if restore_point.is_some() {
                 "Restore point created.".into()

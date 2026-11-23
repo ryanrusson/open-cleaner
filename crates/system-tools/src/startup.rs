@@ -210,8 +210,8 @@ mod windows_impl {
             .create_subkey(approved_path(location))
             .map_err(|e| match e.kind() {
                 std::io::ErrorKind::PermissionDenied => {
-                    "This item applies to all users. Change it from Task Manager, or run Driver \
-                     Updater as administrator."
+                    "This item applies to all users. Change it from Task Manager, or run \
+                     OpenCleaner as administrator."
                         .to_string()
                 }
                 _ => format!("Could not change the startup setting: {e}"),

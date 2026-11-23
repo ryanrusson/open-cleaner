@@ -1,17 +1,22 @@
-# Driver Updater
+# OpenCleaner
 
-A Windows desktop app that keeps a PC in shape: it finds and installs driver
-updates, clears out junk files, manages what starts with Windows, lists and
-removes installed apps, and shows what is filling the disk. Rust backend,
-Tauri 2 + React interface.
+A free, open-source PC maintenance app for Windows. It finds and installs
+driver and app updates, clears out junk files, finds duplicate files, manages
+what starts with Windows, removes installed apps, and shows what is filling
+the disk. Rust backend, Tauri 2 + React interface.
 
-![Driver Updater showing scan results](docs/screenshot.png)
+![OpenCleaner overview page](docs/screenshot.png)
 
 ![Cleaner page listing junk file categories](docs/screenshot-cleaner.png)
 
 *Screenshots use sample data.*
 
 ## What it does
+
+**Overview**
+
+- One page that checks drivers, app updates, junk files and startup apps, and
+  says what is worth a look.
 
 **Drivers**
 
@@ -29,13 +34,28 @@ Tauri 2 + React interface.
   download page, and surfaces devices with missing drivers or errors.
 - Exports the report as CSV or JSON.
 
+**App updates**
+
+- Lists apps with a newer version available through winget, Windows' own
+  package manager, and updates them one at a time or all together.
+
 **Cleaner**
 
 - Measures and removes temporary files, browser caches (Chrome, Edge, Brave,
   Firefox), crash dumps and error reports, the thumbnail cache and the Recycle
   Bin. You choose the categories and confirm before anything is deleted.
+- Can also clean system-wide locations (Windows' temporary files, old Windows
+  Update downloads, system crash dumps). These are off by default and ask for
+  administrator permission.
 - Browser sign-ins, history and passwords are never touched; only caches.
 - Files in use are left alone, and temporary files newer than a day are kept.
+
+**Duplicates**
+
+- Finds files of 1 MB or more that are byte-for-byte identical, in your user
+  folder or any folder you pick. Hidden folders such as app data are skipped.
+- The copies you tick go to the Recycle Bin, so they can be restored, and one
+  copy of every file is always kept.
 
 **Startup**
 
@@ -52,7 +72,9 @@ Tauri 2 + React interface.
 - Shows which folders and files take the most space in your user folder, or
   any folder you pick, with a shortcut to show each in Explorer. Read-only.
 
-Only installing drivers asks for administrator rights. There is deliberately
+Scanning never needs administrator rights. Installing drivers and cleaning
+system-wide locations ask for them at the moment they are needed, and app
+installers may ask on their own. There is deliberately
 no registry cleaner and no drive wiper: the first does more harm than good,
 and the second is too easy to regret.
 
@@ -93,7 +115,7 @@ cargo run -p driver-core --bin driver-scan   # scan from the command line, as JS
 
 | Path | What |
 | --- | --- |
-| `crates/system-tools` | Cleaner, startup manager, installed apps and disk usage. Deletion rules and parsing are plain Rust with tests; registry and shell calls are confined to small Windows-only parts. |
+| `crates/system-tools` | Cleaner, app updates, duplicate finder, startup manager, installed apps and disk usage. Deletion rules and parsing are plain Rust with tests; registry and shell calls are confined to small Windows-only parts. |
 | `crates/driver-core` | The driver logic. `platform/` talks to Windows (WMI for the inventory, the Windows Update Agent API to find and install updates, and the elevated install helper); the rest is plain Rust with tests that run on any OS. |
 | `src-tauri` | The Tauri shell: a handful of commands exposing the two crates to the UI. |
 | `src` | The React interface. |

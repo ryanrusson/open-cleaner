@@ -12,6 +12,18 @@ fn main() {
     eprintln!("{} startup items", startup.len());
     eprintln!("{} installed apps", apps.len());
     eprintln!("{} files, {} bytes under {}", disk.file_count, disk.total_bytes, disk.root);
+    // winget is not on every Windows image, so this one may be unavailable.
+    match system_tools::software::list() {
+        Ok(updates) => eprintln!("{} app updates offered by winget", updates.len()),
+        Err(e) => eprintln!("app updates unavailable: {e}"),
+    }
+    let duplicates = system_tools::duplicates::find(
+        &std::env::temp_dir(),
+        system_tools::duplicates::DEFAULT_MIN_SIZE,
+        &std::sync::atomic::AtomicBool::new(false),
+    )
+    .unwrap_or_else(|e| fail("duplicate scan", &e));
+    eprintln!("{} duplicate groups among {} files", duplicates.groups.len(), duplicates.files_checked);
     if apps.is_empty() {
         fail("installed apps", "found none, which cannot be right on a real PC");
     }

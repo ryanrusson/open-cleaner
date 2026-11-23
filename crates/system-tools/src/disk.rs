@@ -43,7 +43,7 @@ pub struct DiskReport {
 }
 
 /// Links, junctions, and cloud files that are not actually on this disk.
-fn takes_no_space(meta: &fs::Metadata) -> bool {
+pub(crate) fn takes_no_space(meta: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;

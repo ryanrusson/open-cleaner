@@ -1,11 +1,15 @@
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use driver_core::{analyze, export, ScanResult, UpdateReport};
 use system_tools::apps::InstalledApp;
 use system_tools::cleaner::{CleanCategory, CleanResult};
 use system_tools::disk::DiskReport;
+use system_tools::duplicates::{DuplicateReport, RemovalResult};
+use system_tools::software::SoftwareUpdate;
 use system_tools::startup::StartupItem;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_opener::OpenerExt;
@@ -17,6 +21,11 @@ struct AppState {
     report: Mutex<Option<UpdateReport>>,
     /// Paths from the latest disk scan: the only ones Explorer may be asked to show.
     disk_paths: Mutex<HashSet<String>>,
+    /// Package IDs from the latest app-update check: the only ones that may be upgraded.
+    software_ids: Mutex<HashSet<String>>,
+    /// The latest duplicate scan: removals are checked against it.
+    duplicates: Mutex<Option<DuplicateReport>>,
+    duplicates_cancel: Arc<AtomicBool>,
 }
 
 /// Run slow, blocking Windows calls off the UI thread.
@@ -104,9 +113,54 @@ async fn cleaner_scan() -> Result<Vec<CleanCategory>, String> {
     blocking(|| Ok(system_tools::cleaner::scan())).await
 }
 
+/// First argument that makes the exe run as the elevated cleaning helper.
+pub const CLEAN_HELPER_FLAG: &str = "--clean-system";
+
+/// Helper side of system cleaning; `args` are the pipe name, then category
+/// IDs. Reports one line of JSON and returns the process exit code.
+pub fn run_clean_helper(args: &[String]) -> i32 {
+    let Some((pipe_name, ids)) = args.split_first() else { return 2 };
+    let Some(mut pipe) = driver_core::open_helper_pipe(pipe_name) else { return 3 };
+    // Elevated rights are only for the categories that need them.
+    let ids: Vec<String> =
+        ids.iter().filter(|id| system_tools::cleaner::needs_admin(id)).cloned().collect();
+    let result = system_tools::cleaner::clean(&ids);
+    let Ok(mut line) = serde_json::to_vec(&result) else { return 1 };
+    line.push(b'\n');
+    i32::from(pipe.write_all(&line).is_err())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CleanOutcome {
+    #[serde(flatten)]
+    result: CleanResult,
+    /// Set when the system-wide part could not be done.
+    note: Option<String>,
+}
+
 #[tauri::command]
-async fn cleaner_clean(ids: Vec<String>) -> Result<CleanResult, String> {
-    blocking(move || Ok(system_tools::cleaner::clean(&ids))).await
+async fn cleaner_clean(ids: Vec<String>) -> Result<CleanOutcome, String> {
+    blocking(move || {
+        let (system, user): (Vec<String>, Vec<String>) =
+            ids.into_iter().partition(|id| system_tools::cleaner::needs_admin(id));
+        let mut result = system_tools::cleaner::clean(&user);
+        let mut note = None;
+        if !system.is_empty() {
+            let mut reported = None;
+            let run = driver_core::run_elevated(CLEAN_HELPER_FLAG, &system, &mut |line| {
+                reported = serde_json::from_slice::<CleanResult>(line).ok();
+                Ok(())
+            });
+            match (run, reported) {
+                (Ok(()), Some(system_result)) => result.add(&system_result),
+                (Err(e), _) => note = Some(format!("{e} System files were not cleaned.")),
+                (Ok(()), None) => note = Some("System files could not be cleaned.".to_string()),
+            }
+        }
+        Ok(CleanOutcome { result, note })
+    })
+    .await
 }
 
 #[tauri::command]
@@ -149,8 +203,12 @@ async fn disk_scan(state: State<'_, AppState>, path: Option<String>) -> Result<D
 /// Opens Explorer with the given file or folder selected.
 #[tauri::command]
 fn reveal_in_explorer(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    if !state.disk_paths.lock().unwrap().contains(&path) {
-        return Err("Analyse the folder again first.".into());
+    let from_disk_scan = state.disk_paths.lock().unwrap().contains(&path);
+    let from_duplicates = state.duplicates.lock().unwrap().as_ref().is_some_and(|report| {
+        report.groups.iter().any(|g| g.files.iter().any(|f| f.path == path))
+    });
+    if !from_disk_scan && !from_duplicates {
+        return Err("Scan the folder again first.".into());
     }
     #[cfg(windows)]
     {
@@ -163,6 +221,61 @@ fn reveal_in_explorer(state: State<'_, AppState>, path: String) -> Result<(), St
     }
     #[cfg(not(windows))]
     Err("This only works on Windows.".into())
+}
+
+#[tauri::command]
+async fn software_list(state: State<'_, AppState>) -> Result<Vec<SoftwareUpdate>, String> {
+    let updates = blocking(system_tools::software::list).await?;
+    *state.software_ids.lock().unwrap() = updates.iter().map(|u| u.id.clone()).collect();
+    Ok(updates)
+}
+
+#[tauri::command]
+async fn software_upgrade(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    if !state.software_ids.lock().unwrap().contains(&id) {
+        return Err("Check for app updates again first.".into());
+    }
+    blocking(move || system_tools::software::upgrade(&id)).await
+}
+
+/// Looks for identical files in a folder; with no path, the user's profile.
+#[tauri::command]
+async fn duplicates_find(
+    state: State<'_, AppState>,
+    path: Option<String>,
+) -> Result<DuplicateReport, String> {
+    let root = path
+        .map(PathBuf::from)
+        .or_else(system_tools::disk::default_root)
+        .ok_or("Choose a folder to search.")?;
+    let cancel = state.duplicates_cancel.clone();
+    cancel.store(false, Ordering::Relaxed);
+    let report = blocking(move || {
+        system_tools::duplicates::find(&root, system_tools::duplicates::DEFAULT_MIN_SIZE, &cancel)
+    })
+    .await?;
+    *state.duplicates.lock().unwrap() = Some(report.clone());
+    Ok(report)
+}
+
+#[tauri::command]
+fn duplicates_cancel(state: State<'_, AppState>) {
+    state.duplicates_cancel.store(true, Ordering::Relaxed);
+}
+
+/// Moves the chosen duplicates to the Recycle Bin.
+#[tauri::command]
+async fn duplicates_remove(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<RemovalResult, String> {
+    let report = state
+        .duplicates
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("Scan for duplicates again before removing anything.")?;
+    blocking(move || system_tools::duplicates::remove(&report, &paths)).await
 }
 
 pub fn run() {
@@ -183,7 +296,12 @@ pub fn run() {
             apps_list,
             apps_uninstall,
             disk_scan,
-            reveal_in_explorer
+            reveal_in_explorer,
+            software_list,
+            software_upgrade,
+            duplicates_find,
+            duplicates_cancel,
+            duplicates_remove
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the application");
