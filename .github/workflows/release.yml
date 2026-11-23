@@ -47,9 +47,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
-      - run: cargo test -p driver-core
+      - run: cargo test -p driver-core -p system-tools
       - name: Smoke test the scanner
         run: cargo run -p driver-core --bin driver-scan > scan.json
+      # Read-only run of the cleaner, startup, apps and disk scans.
+      - name: Smoke test the tools
+        run: cargo run -p system-tools --bin tools-scan > tools.json
       - run: npm run tauri build
       # Tag with git rather than letting the release API create the tag:
       # the API refuses to tag commits that touch workflow files.

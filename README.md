@@ -1,34 +1,62 @@
 # Driver Updater
 
-A Windows desktop app that scans the drivers installed on your PC and tells you
-which ones have updates. Rust backend, Tauri 2 + React interface.
+A Windows desktop app that keeps a PC in shape: it finds and installs driver
+updates, clears out junk files, manages what starts with Windows, lists and
+removes installed apps, and shows what is filling the disk. Rust backend,
+Tauri 2 + React interface.
 
 ![Driver Updater showing scan results](docs/screenshot.png)
 
-*Screenshot uses sample data.*
+![Cleaner page listing junk file categories](docs/screenshot-cleaner.png)
+
+*Screenshots use sample data.*
 
 ## What it does
 
-- **Inventories every installed driver**: device, provider, version, date, signer, INF and hardware ID.
-- **Asks Windows Update what is newer**, including the optional driver updates
+**Drivers**
+
+- Inventories every installed driver: device, provider, version, date, signer,
+  INF and hardware ID.
+- Asks Windows Update what is newer, including the optional driver updates
   Windows tucks away in Settings. Each offer is matched to the installed driver
   by hardware ID and only shown as an update if it is actually newer.
-- **Flags drivers worth checking by hand**: old graphics, network, audio, chipset
-  and storage drivers where the vendor (NVIDIA, AMD, Intel, or your PC maker)
-  likely has something newer than Windows Update. It links to the vendor's
-  official download page; nothing is scraped or downloaded from third parties.
-- **Surfaces problem devices**: missing drivers and Device Manager error codes.
-- **Exports** the report as CSV or JSON.
+- Installs the updates you choose. Windows asks for administrator permission,
+  the app tries to create a restore point, then downloads and installs through
+  Windows Update, so every driver is the same Microsoft-signed package Windows
+  itself would install.
+- Flags old graphics, network, audio, chipset and storage drivers where the
+  vendor likely has something newer, with a link to the vendor's official
+  download page, and surfaces devices with missing drivers or errors.
+- Exports the report as CSV or JSON.
 
-- **Installs the updates you choose**, one click each or all at once. Windows
-  asks for administrator permission, the app tries to create a restore point,
-  then downloads and installs through Windows Update, so every driver is the
-  same Microsoft-signed package Windows itself would install.
+**Cleaner**
 
-- **Tells you when a new version of the app is out**, with a link to download it.
+- Measures and removes temporary files, browser caches (Chrome, Edge, Brave,
+  Firefox), crash dumps and error reports, the thumbnail cache and the Recycle
+  Bin. You choose the categories and confirm before anything is deleted.
+- Browser sign-ins, history and passwords are never touched; only caches.
+- Files in use are left alone, and temporary files newer than a day are kept.
 
-Scanning needs no administrator rights and changes nothing. Only installing
-asks for elevation, and only for the updates you confirmed.
+**Startup**
+
+- Lists what launches when you sign in and lets you switch each item off or
+  back on. It uses the same switch as Task Manager, so nothing is deleted.
+
+**Apps**
+
+- Lists installed programs with version, install date and size, and opens a
+  program's own uninstaller on request.
+
+**Disk**
+
+- Shows which folders and files take the most space in your user folder, or
+  any folder you pick, with a shortcut to show each in Explorer. Read-only.
+
+Only installing drivers asks for administrator rights. There is deliberately
+no registry cleaner and no drive wiper: the first does more harm than good,
+and the second is too easy to regret.
+
+The app also tells you when a new version of itself is out.
 
 ## Download
 
@@ -57,7 +85,7 @@ npm install
 npm run tauri dev      # run the app (Windows)
 npm run tauri build    # build the installer (Windows)
 npm run dev            # UI only, in a browser, on sample data (any OS)
-cargo test -p driver-core
+cargo test -p driver-core -p system-tools
 cargo run -p driver-core --bin driver-scan   # scan from the command line, as JSON (Windows)
 ```
 
@@ -65,6 +93,7 @@ cargo run -p driver-core --bin driver-scan   # scan from the command line, as JS
 
 | Path | What |
 | --- | --- |
-| `crates/driver-core` | All the logic. `platform/` talks to Windows (WMI for the inventory, the Windows Update Agent API to find and install updates, and the elevated install helper); the rest is plain Rust with tests that run on any OS. |
-| `src-tauri` | The Tauri shell: a handful of commands exposing `driver-core` to the UI. |
+| `crates/system-tools` | Cleaner, startup manager, installed apps and disk usage. Deletion rules and parsing are plain Rust with tests; registry and shell calls are confined to small Windows-only parts. |
+| `crates/driver-core` | The driver logic. `platform/` talks to Windows (WMI for the inventory, the Windows Update Agent API to find and install updates, and the elevated install helper); the rest is plain Rust with tests that run on any OS. |
+| `src-tauri` | The Tauri shell: a handful of commands exposing the two crates to the UI. |
 | `src` | The React interface. |

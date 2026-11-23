@@ -69,3 +69,61 @@ export type InstallEvent =
   | { kind: "update"; updateId: string; stage: InstallStage; detail: string }
   | { kind: "finished"; installed: number; failed: number; rebootRequired: boolean }
   | { kind: "error"; message: string };
+
+// Mirrors crates/system-tools.
+
+export interface CleanCategory {
+  id: string;
+  label: string;
+  description: string;
+  sizeBytes: number;
+  itemCount: number;
+  recommended: boolean;
+}
+
+export interface CleanResult {
+  freedBytes: number;
+  deleted: number;
+  skipped: number;
+}
+
+export interface StartupItem {
+  id: string;
+  name: string;
+  command: string;
+  source: string;
+  enabled: boolean;
+  canToggle: boolean;
+}
+
+export interface InstalledApp {
+  id: string;
+  name: string;
+  version: string;
+  publisher: string;
+  installDate: string | null;
+  sizeBytes: number | null;
+  canUninstall: boolean;
+}
+
+export interface FolderSize {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  fileCount: number;
+}
+
+export interface FileEntry {
+  path: string;
+  sizeBytes: number;
+  modified: number | null;
+}
+
+export interface DiskReport {
+  root: string;
+  totalBytes: number;
+  fileCount: number;
+  folders: FolderSize[];
+  largestFiles: FileEntry[];
+  unreadable: number;
+}

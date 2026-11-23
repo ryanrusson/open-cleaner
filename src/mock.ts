@@ -1,5 +1,14 @@
 // Sample data for working on the UI in a browser, without Windows.
-import type { AvailableUpdate, Driver, ScanResult, UpdateReport } from "./types";
+import type {
+  AvailableUpdate,
+  CleanCategory,
+  DiskReport,
+  Driver,
+  InstalledApp,
+  ScanResult,
+  StartupItem,
+  UpdateReport,
+} from "./types";
 
 const driver = (
   deviceName: string,
@@ -95,4 +104,100 @@ export const mockReport: UpdateReport = {
   unmatched: [
     update(drivers[11], "Dell Inc. - Monitor - 1.0.0.0", "2021-11-02", 1),
   ],
+};
+
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+const cacheNote = "Cached web pages and images. Sign-ins, history and passwords are kept.";
+
+export const mockJunk: CleanCategory[] = [
+  { id: "temp", label: "Temporary files", description: "Leftovers from apps and installers, untouched for at least a day.", sizeBytes: 1.8 * GB, itemCount: 4210, recommended: true },
+  { id: "chrome-cache", label: "Chrome cache", description: cacheNote, sizeBytes: 912 * MB, itemCount: 8804, recommended: true },
+  { id: "edge-cache", label: "Edge cache", description: cacheNote, sizeBytes: 431 * MB, itemCount: 3920, recommended: true },
+  { id: "crash-dumps", label: "Crash dumps and error reports", description: "Diagnostic files saved when apps crashed.", sizeBytes: 268 * MB, itemCount: 37, recommended: true },
+  { id: "thumbnails", label: "Thumbnail cache", description: "Preview images for folders. Windows rebuilds them as needed.", sizeBytes: 96 * MB, itemCount: 12, recommended: false },
+  { id: "recycle-bin", label: "Recycle Bin", description: "Files you already deleted. Emptying it is permanent.", sizeBytes: 3.4 * GB, itemCount: 152, recommended: false },
+];
+
+const startup = (name: string, command: string, enabled: boolean, allUsers = false): StartupItem => ({
+  id: `${allUsers ? "machine-run" : "user-run"}|${name}`,
+  name,
+  command,
+  source: allUsers ? "Registry (all users)" : "Registry (your account)",
+  enabled,
+  canToggle: !allUsers,
+});
+
+export const mockStartup: StartupItem[] = [
+  startup("Discord", '"C:\\Users\\you\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe', true),
+  startup("Microsoft Teams", '"C:\\Users\\you\\AppData\\Local\\Microsoft\\Teams\\Update.exe" --processStart Teams.exe', false),
+  startup("OneDrive", '"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe" /background', true),
+  startup("RtkAudUService", '"C:\\Windows\\System32\\RtkAudUService64.exe" -background', true, true),
+  startup("SecurityHealth", "%windir%\\system32\\SecurityHealthSystray.exe", true, true),
+  startup("Spotify", '"C:\\Users\\you\\AppData\\Roaming\\Spotify\\Spotify.exe" --autostart --minimized', true),
+  startup("Steam", '"C:\\Program Files (x86)\\Steam\\steam.exe" -silent', true),
+];
+
+const app = (name: string, version: string, publisher: string, installDate: string | null, sizeMb: number | null): InstalledApp => ({
+  id: `machine|${name}`,
+  name,
+  version,
+  publisher,
+  installDate,
+  sizeBytes: sizeMb === null ? null : sizeMb * MB,
+  canUninstall: true,
+});
+
+export const mockApps: InstalledApp[] = [
+  app("7-Zip 24.08 (x64)", "24.08", "Igor Pavlov", "2025-02-11", 5.6),
+  app("Adobe Acrobat Reader", "24.003.20180", "Adobe", "2025-09-30", 612),
+  app("Blender", "4.2.1", "Blender Foundation", "2024-11-02", 1150),
+  app("Discord", "1.0.9163", "Discord Inc.", "2026-10-04", 412),
+  app("Git", "2.47.0", "The Git Development Community", "2026-01-19", 368),
+  app("Google Chrome", "131.0.6778.86", "Google LLC", "2026-11-18", null),
+  app("Microsoft Visual Studio Code", "1.95.3", "Microsoft Corporation", "2026-11-14", 398),
+  app("NVIDIA Graphics Driver 560.94", "560.94", "NVIDIA Corporation", "2024-08-20", 1890),
+  app("Spotify", "1.2.50.335", "Spotify AB", "2026-10-28", 324),
+  app("Steam", "2.10.91.91", "Valve Corporation", "2023-05-06", 1210),
+  app("VLC media player", "3.0.21", "VideoLAN", null, 172),
+  app("Zoom Workplace", "6.2.7", "Zoom Video Communications, Inc.", "2026-09-12", 286),
+];
+
+const folder = (name: string, sizeGb: number, fileCount: number) => ({
+  name,
+  path: `C:\\Users\\you\\${name}`,
+  sizeBytes: sizeGb * GB,
+  fileCount,
+});
+
+const file = (path: string, sizeGb: number, year: number) => ({
+  path: `C:\\Users\\you\\${path}`,
+  sizeBytes: sizeGb * GB,
+  modified: Date.UTC(year, 5, 14) / 1000,
+});
+
+export const mockDisk: DiskReport = {
+  root: "C:\\Users\\you",
+  totalBytes: 187.3 * GB,
+  fileCount: 412_877,
+  folders: [
+    folder("AppData", 61.2, 301_442),
+    folder("Videos", 48.9, 312),
+    folder("Downloads", 33.5, 1_904),
+    folder("Documents", 21.4, 18_220),
+    folder("Pictures", 17.8, 44_310),
+    folder("Desktop", 3.1, 211),
+    folder("Music", 1.4, 46_478),
+  ],
+  largestFiles: [
+    file("Videos\\Captures\\raid-night-full.mkv", 14.2, 2025),
+    file("Downloads\\Win11_24H2_English_x64.iso", 5.4, 2024),
+    file("Videos\\wedding-export-final.mp4", 4.9, 2023),
+    file("AppData\\Local\\Docker\\wsl\\disk\\docker_data.vhdx", 4.6, 2026),
+    file("Downloads\\ubuntu-24.04-desktop-amd64.iso", 4.1, 2024),
+    file("Documents\\Backups\\phone-backup-2022.zip", 3.3, 2022),
+    file("Videos\\Captures\\clip-0042.mp4", 2.7, 2026),
+    file("Downloads\\blender-4.2.1-windows-x64.msi", 1.1, 2024),
+  ],
+  unreadable: 3,
 };

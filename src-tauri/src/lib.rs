@@ -1,6 +1,12 @@
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use driver_core::{analyze, export, ScanResult, UpdateReport};
+use system_tools::apps::InstalledApp;
+use system_tools::cleaner::{CleanCategory, CleanResult};
+use system_tools::disk::DiskReport;
+use system_tools::startup::StartupItem;
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -9,6 +15,8 @@ use tauri_plugin_opener::OpenerExt;
 struct AppState {
     scan: Mutex<Option<ScanResult>>,
     report: Mutex<Option<UpdateReport>>,
+    /// Paths from the latest disk scan: the only ones Explorer may be asked to show.
+    disk_paths: Mutex<HashSet<String>>,
 }
 
 /// Run slow, blocking Windows calls off the UI thread.
@@ -91,6 +99,72 @@ fn open_link(app: AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn cleaner_scan() -> Result<Vec<CleanCategory>, String> {
+    blocking(|| Ok(system_tools::cleaner::scan())).await
+}
+
+#[tauri::command]
+async fn cleaner_clean(ids: Vec<String>) -> Result<CleanResult, String> {
+    blocking(move || Ok(system_tools::cleaner::clean(&ids))).await
+}
+
+#[tauri::command]
+async fn startup_list() -> Result<Vec<StartupItem>, String> {
+    blocking(system_tools::startup::list).await
+}
+
+#[tauri::command]
+async fn startup_set_enabled(id: String, enabled: bool) -> Result<(), String> {
+    blocking(move || system_tools::startup::set_enabled(&id, enabled)).await
+}
+
+#[tauri::command]
+async fn apps_list() -> Result<Vec<InstalledApp>, String> {
+    blocking(system_tools::apps::list).await
+}
+
+#[tauri::command]
+async fn apps_uninstall(id: String) -> Result<(), String> {
+    blocking(move || system_tools::apps::uninstall(&id)).await
+}
+
+/// Measures a folder; with no path, the user's own profile folder.
+#[tauri::command]
+async fn disk_scan(state: State<'_, AppState>, path: Option<String>) -> Result<DiskReport, String> {
+    let root = path
+        .map(PathBuf::from)
+        .or_else(system_tools::disk::default_root)
+        .ok_or("Choose a folder to analyse.")?;
+    let report = blocking(move || system_tools::disk::scan(&root)).await?;
+    *state.disk_paths.lock().unwrap() = report
+        .folders
+        .iter()
+        .map(|f| f.path.clone())
+        .chain(report.largest_files.iter().map(|f| f.path.clone()))
+        .collect();
+    Ok(report)
+}
+
+/// Opens Explorer with the given file or folder selected.
+#[tauri::command]
+fn reveal_in_explorer(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    if !state.disk_paths.lock().unwrap().contains(&path) {
+        return Err("Analyse the folder again first.".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer.exe")
+            .raw_arg(format!("/select,\"{path}\""))
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Could not open Explorer: {e}"))
+    }
+    #[cfg(not(windows))]
+    Err("This only works on Windows.".into())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -101,7 +175,15 @@ pub fn run() {
             check_updates,
             export_report,
             install_updates,
-            open_link
+            open_link,
+            cleaner_scan,
+            cleaner_clean,
+            startup_list,
+            startup_set_enabled,
+            apps_list,
+            apps_uninstall,
+            disk_scan,
+            reveal_in_explorer
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the application");

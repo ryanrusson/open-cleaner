@@ -1,6 +1,6 @@
 [package]
 name = "windows-driver-updater"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Scans installed Windows drivers and reports which updates are available"
 
@@ -13,6 +13,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 driver-core = { path = "../crates/driver-core" }
+system-tools = { path = "../crates/system-tools" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"

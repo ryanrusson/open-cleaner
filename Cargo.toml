@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/driver-core", "src-tauri"]
+members = ["crates/driver-core", "crates/system-tools", "src-tauri"]
 resolver = "2"
 
 [profile.release]

@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "driver-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3602,6 +3602,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-tools"
+version = "0.4.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "windows",
+ "winreg",
+]
+
+[[package]]
 name = "tao"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4713,10 +4723,11 @@ dependencies = [
 
 [[package]]
 name = "windows-driver-updater"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "driver-core",
  "serde",
+ "system-tools",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

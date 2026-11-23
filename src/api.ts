@@ -1,9 +1,18 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { save } from "@tauri-apps/plugin-dialog";
-import { mockReport, mockScan } from "./mock";
-import type { InstallEvent, ScanResult, UpdateReport } from "./types";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { mockApps, mockDisk, mockJunk, mockReport, mockScan, mockStartup } from "./mock";
+import type {
+  CleanCategory,
+  CleanResult,
+  DiskReport,
+  InstallEvent,
+  InstalledApp,
+  ScanResult,
+  StartupItem,
+  UpdateReport,
+} from "./types";
 
 /** False when the UI is opened in a plain browser, where it runs on sample data. */
 export const inApp = "__TAURI_INTERNALS__" in window;
@@ -114,4 +123,47 @@ export async function checkForAppUpdate(): Promise<AppUpdate | null> {
   } catch {
     return null;
   }
+}
+
+// --- Cleaner, startup, apps, disk -----------------------------------------
+
+export const cleanerScan = (): Promise<CleanCategory[]> =>
+  inApp ? invoke("cleaner_scan") : later(mockJunk, 700);
+
+export const cleanerClean = (ids: string[]): Promise<CleanResult> =>
+  inApp
+    ? invoke("cleaner_clean", { ids })
+    : later(
+        {
+          freedBytes: mockJunk.filter((c) => ids.includes(c.id)).reduce((n, c) => n + c.sizeBytes, 0),
+          deleted: mockJunk.filter((c) => ids.includes(c.id)).reduce((n, c) => n + c.itemCount, 0),
+          skipped: 14,
+        },
+        1200,
+      );
+
+export const startupList = (): Promise<StartupItem[]> =>
+  inApp ? invoke("startup_list") : later(mockStartup, 300);
+
+export const startupSetEnabled = (id: string, enabled: boolean): Promise<void> =>
+  inApp ? invoke("startup_set_enabled", { id, enabled }) : later(undefined, 150);
+
+export const appsList = (): Promise<InstalledApp[]> =>
+  inApp ? invoke("apps_list") : later(mockApps, 300);
+
+export const appsUninstall = (id: string): Promise<void> =>
+  inApp ? invoke("apps_uninstall", { id }) : later(undefined, 300);
+
+/** Analyses the given folder, or the user's profile folder when omitted. */
+export const diskScan = (path?: string): Promise<DiskReport> =>
+  inApp ? invoke("disk_scan", { path: path ?? null }) : later(mockDisk, 900);
+
+export const revealInExplorer = (path: string): Promise<void> =>
+  inApp ? invoke("reveal_in_explorer", { path }) : later(undefined, 0);
+
+/** Returns the chosen folder, or null if the user cancelled. */
+export async function pickFolder(): Promise<string | null> {
+  if (!inApp) return null;
+  const picked = await open({ directory: true, title: "Choose a folder to analyse" });
+  return typeof picked === "string" ? picked : null;
 }
