@@ -1,5 +1,11 @@
 # OpenCleaner
 
+[![Build](https://github.com/ryanrusson/open-cleaner/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ryanrusson/open-cleaner/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/ryanrusson/open-cleaner)](https://github.com/ryanrusson/open-cleaner/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/ryanrusson/open-cleaner/total)](https://github.com/ryanrusson/open-cleaner/releases)
+![Platform: Windows 10 and 11](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)
+![Built with Rust and Tauri](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri-orange)
+
 A free, open-source PC maintenance app for Windows. It finds and installs
 driver and app updates, clears out junk files, finds duplicate files, manages
 what starts with Windows, removes installed apps, and shows what is filling
