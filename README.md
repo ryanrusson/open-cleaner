@@ -82,7 +82,7 @@ The app also tells you when a new version of itself is out.
 
 ## Download
 
-**[Download the latest release](https://github.com/ryanrusson/windows-driver-updater/releases/latest)**
+**[Download the latest release](https://github.com/ryanrusson/open-cleaner/releases/latest)**
 and run the `.exe` under Assets.
 
 The installer is not code-signed yet, so Windows SmartScreen will warn the

@@ -1,6 +1,6 @@
 [package]
 name = "system-tools"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "PC maintenance tools: junk cleaner, startup manager, installed apps, disk usage"
 

@@ -1,6 +1,6 @@
 [package]
-name = "windows-driver-updater"
-version = "0.5.0"
+name = "opencleaner"
+version = "0.5.1"
 edition = "2021"
 description = "PC maintenance for Windows: driver and app updates, junk cleaning, startup, duplicates, disk usage"
 

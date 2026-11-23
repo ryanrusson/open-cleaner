@@ -97,7 +97,7 @@ async function mockInstall(ids: string[], onEvent: (event: InstallEvent) => void
 }
 
 const LATEST_RELEASE =
-  "https://api.github.com/repos/ryanrusson/windows-driver-updater/releases/latest";
+  "https://api.github.com/repos/ryanrusson/open-cleaner/releases/latest";
 
 export interface AppUpdate {
   version: string;

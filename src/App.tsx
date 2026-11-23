@@ -49,7 +49,8 @@ export default function App() {
         <div className="sidebar-brand">
           <svg className="logo" viewBox="0 0 32 32" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="var(--accent)" />
-            <path d="M16 7v11m0 0-4.5-4.5M16 18l4.5-4.5M9 22.5h14" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M22.7 15.4A7.6 7.6 0 1 1 16.6 9.5" fill="none" stroke="#fff" strokeWidth="2.7" strokeLinecap="round" />
+            <path d="M23 3.9Q23.5 8 27.6 8.5Q23.5 9 23 13.1Q22.5 9 18.4 8.5Q22.5 8 23 3.9Z" fill="#fff" />
           </svg>
           <span>OpenCleaner</span>
         </div>
